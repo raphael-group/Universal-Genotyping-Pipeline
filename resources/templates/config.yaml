@@ -52,9 +52,17 @@ snp_targets: /path/to/target_positions
 
 ##################################################
 # Phasing
-phaser: "eagle"
 phasing_panel: /path/to/phasing_panel
-gmap_path: "/path/to/eagle/resources/maps/b38/chr{chrname}.b38.gmap.gz"
+phaser: "eagle"
+gmap_path: "/path/to/Eagle_v2.4.1/tables/genetic_map_hg38_withX.txt.gz"
+# OR SHAPEIT5
+#   phaser: "shapeit"
+#   gmap_path: "/path/to/shapeit5/resources/maps/b38/chr{chrname}.b38.gmap.gz"
+
+# OR LongPhase (long-read): ignores phasing_panel / gmap_path.
+#   phaser: "longphase"
+#   params_longphase:
+#     extra_params: "--pb"   # PacBio HiFi; "--ont" for Oxford Nanopore
 
 ##################################################
 # Segmentation (adaptive binning + RDR/BAF)

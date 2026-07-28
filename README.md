@@ -1,5 +1,6 @@
 # Universal Genotyping Pipeline
 
+[![CI](https://github.com/raphael-group/Universal-Genotyping-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/raphael-group/Universal-Genotyping-Pipeline/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.1.0b1-blue.svg)](VERSION)
 [![Snakemake](https://img.shields.io/badge/snakemake->=9.0-brightgreen.svg)](https://snakemake.readthedocs.io)
 

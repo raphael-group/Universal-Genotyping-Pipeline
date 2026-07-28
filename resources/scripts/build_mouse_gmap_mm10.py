@@ -31,6 +31,9 @@ Notes/References:
   COMBINED_rate is the forward interval rate (cM/Mb) to the next marker; the last
       marker per chromosome carries 0. The per-chromosome zero anchor (bp_b38==0) is
       dropped so the map starts at the first genotyped marker.
+  CoxMapV3 has centromeric inversions (chr10, chr14): sorted by bp_b38, cM can dip.
+      A marker whose cM falls below the running max is dropped, keeping the map
+      monotonic non-decreasing (a genetic map cannot have negative recombination rates).
 """
 
 import argparse
@@ -75,6 +78,10 @@ def main():
         pos = sub["bp_b38"].to_numpy(dtype=np.int64)
         cm_col = "fem_cM" if chrom == "X" else "ave_cM"
         cm = sub[cm_col].to_numpy(dtype=np.float64)
+        # drop markers whose cM dips below the running max (CoxMapV3 chr10/chr14 inversions)
+        keep = np.ones(len(cm), dtype=bool)
+        keep[1:] = cm[1:] >= np.maximum.accumulate(cm)[:-1]
+        pos, cm = pos[keep], cm[keep]
         rate = np.zeros_like(cm)
         dpos = np.diff(pos)
         rate[:-1] = np.where(dpos > 0, np.diff(cm) / dpos * 1e6, 0.0)
@@ -95,7 +102,7 @@ def main():
                 }
             )
         )
-        print(f"  chr{chrom}: {len(sub)} markers")
+        print(f"  chr{chrom}: {len(pos)} markers ({int((~keep).sum())} dropped)")
 
     eagle = pd.concat(eagle_frames, ignore_index=True)
     out_eagle = os.path.join(eagle_dir, "genetic_map_mm10_withX.txt.gz")
