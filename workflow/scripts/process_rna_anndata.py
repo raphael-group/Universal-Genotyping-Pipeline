@@ -1,6 +1,6 @@
 """One AnnData per RNA-family assay, over all of the sample's datasets.
 
-Last update: 2026-08-11
+Last update: 2026-09-02
 
 Inputs:
 - barcodes: per-dataset cell barcodes from the sample file
@@ -10,7 +10,7 @@ Inputs:
 - tissue_hires_image.png: spatial tissue image, hires
 - tissue_lowres_image.png: spatial tissue image, lowres
 - gtf_file: gene coordinates, joined on gene_id_colname
-- gene_blacklist_file: optional, one gene id per line
+- gene_blacklist_file: optional, one gene symbol or id per line
 - aux_dir/segment.bed: a gene outside every region is dropped
 Outputs:
 - bb_dir/{assay}.h5ad: cells x genes, obs_names {raw}_{dataset_id}_{assay_type}
@@ -136,7 +136,11 @@ if gene_blacklist_file is not None:
     gene_blacklist = (
         pd.read_table(gene_blacklist_file, header=None).iloc[:, 0].to_numpy()
     )
-    drop = keep & np.isin(var_coords.index, gene_blacklist)
+    # NB: var_names carry make_unique suffixes, gene_symbol is the raw 10x symbol
+    drop = keep & (
+        np.isin(var_coords.index, gene_blacklist)
+        | np.isin(var_coords["gene_symbol"], gene_blacklist)
+    )
     logging.info(
         f"remove #{drop.sum()}/{num_genes} genes based on {gene_blacklist_file}"
     )

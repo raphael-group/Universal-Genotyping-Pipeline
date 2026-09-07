@@ -1,6 +1,6 @@
 """Read the pipeline's input files and write its tabular outputs.
 
-Last update: 2026-08-12
+Last update: 2026-09-02
 
 Grouped by format, each block reading before writing:
 - Universal: read_chrom_sizes, symlink_files
@@ -9,14 +9,16 @@ Grouped by format, each block reading before writing:
 - BED: read_BED, read_segment_bed, read_window_bed, read_mosdepth_bed, read_bedgraph,
   read_extremity_tsv
 - Pipeline: read_bcftools_pileup_counts, read_allele_mat, read_snp_mats, read_barcodes,
-  read_barcodes_by_dataset, read_chunks_from_atac_fragments, read_10x_ranger_scRNA,
-  read_10x_ranger_spatial, write_snp_info, write_bb_file, write_sample_ids
+  read_barcodes_by_dataset, read_chunks_from_atac_fragments, uniquify_var_names,
+  read_10x_ranger_scRNA, read_10x_ranger_spatial, write_snp_info, write_bb_file,
+  write_sample_ids
 """
 
 import logging
 import os
 import subprocess
 import tempfile
+import warnings
 from collections import OrderedDict
 
 import pandas as pd
@@ -663,6 +665,37 @@ def read_chunks_from_atac_fragments(frag_file: str, chunksize=5_000_000):
     )
 
 
+def uniquify_var_names(adata, label: str):
+    """Keep the raw 10x gene symbols, then suffix the repeated ones.
+
+    A 10x reference repeats a gene symbol across loci while its gene id stays unique, so
+    ``var_names`` (the symbols) are not unique on read. ``var_names_make_unique`` appends
+    ``-1``, ``-2`` to the second and later copies; the raw symbol is preserved in
+    ``var["gene_symbol"]`` so a caller matching on symbols (the gene blacklist) still sees
+    every copy. The GTF join keys on the gene id and is unaffected.
+
+    Args:
+        adata: AnnData from a 10x reader, var_names being gene symbols.
+        label: Dataset label for the log line.
+
+    Returns:
+        The same AnnData, var_names unique.
+
+    Notes/References:
+        Suffixing rule (the first occurrence keeps the bare symbol):
+        https://anndata.readthedocs.io/en/latest/generated/anndata.AnnData.var_names_make_unique.html
+    """
+    adata.var["gene_symbol"] = adata.var_names.astype(str)
+    num_dup = int(adata.var_names.duplicated().sum())
+    if num_dup > 0:
+        logging.warning(
+            f"{label}, #gene symbols repeated={num_dup}/{adata.n_vars}, "
+            "suffixed to make var_names unique"
+        )
+    adata.var_names_make_unique()
+    return adata
+
+
 def read_10x_ranger_scRNA(matrix_h5):
     """Read one Cell Ranger gene-expression matrix into an AnnData.
 
@@ -677,9 +710,10 @@ def read_10x_ranger_scRNA(matrix_h5):
     """
     import scanpy as sc
 
-    adata = sc.read_10x_h5(matrix_h5, gex_only=True)
-    adata.var_names_make_unique()
-    return adata
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r".*names are not unique", UserWarning)
+        adata = sc.read_10x_h5(matrix_h5, gex_only=True)
+    return uniquify_var_names(adata, os.path.basename(matrix_h5))
 
 
 def read_10x_ranger_spatial(
@@ -722,9 +756,12 @@ def read_10x_ranger_spatial(
         for name, path in zip(names, paths):
             os.symlink(os.path.abspath(path), os.path.join(spatial_dir, name))
         logging.info(f"staged {len(names) + 1} files for squidpy: {names}")
-        adata = sq.read.visium(tmp_dir, load_images=load_images, library_id=library_id)
-    adata.var_names_make_unique()
-    return adata
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", r".*names are not unique", UserWarning)
+            adata = sq.read.visium(
+                tmp_dir, load_images=load_images, library_id=library_id
+            )
+    return uniquify_var_names(adata, library_id)
 
 
 def write_snp_info(
