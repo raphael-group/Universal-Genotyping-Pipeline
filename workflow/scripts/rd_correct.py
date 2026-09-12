@@ -6,7 +6,8 @@ Inputs:
 - pileup_dir/{assay}/out_mosdepth/{dataset_id}.regions.bed.gz: per-dataset per-bin depth
 - aux_dir/windows.bed.gz: the shared fixed bins with GC, MAP, REPLI, region_id
 - aux_dir/window.target.npz: optional per-window capture-target fraction; when present,
-  a bulkWES dataset is corrected on- and off-target separately
+  a bulkWES dataset is corrected on- and off-target separately and every dataset is then
+  rescaled to a common depth level within each group
 - genome_size, region_bed, blacklist_bed: QC plot axis and shading
 Outputs:
 - pileup_dir/bulk/window.raw.dp.npz: raw mosdepth depth, windows x all bulk datasets,
@@ -43,6 +44,7 @@ from rd_correct_utils import (
     correct_readcount_by_target_sites,
     correct_readcount_lowess,
     correct_readcount_quadreg,
+    normalize_library_by_target,
 )
 from plot_count_reads import plot_rd_1d_scatter, plot_rd_2d_kde
 
@@ -227,6 +229,19 @@ if map_vals is not None:
         f"mappability filter: {int(low_map.sum())}/{n_bins} fixed bins below "
         f"{min_mappability}, NaN for every dataset"
     )
+
+if target_sites is not None and "bulkWES" in dataset_assays:
+    logging.info(
+        "library-size normalization per capture group (on- and off-target apart), "
+        "every bulk dataset in the run"
+    )
+    bin_lengths = (bin_df["END"] - bin_df["START"]).to_numpy(dtype=np.float64)
+    dp_corrected, target_factors = normalize_library_by_target(
+        dp_corrected, target_sites, bin_lengths
+    )
+    for label, fac in target_factors.items():
+        pretty = ", ".join(f"{d}={f:.4f}" for d, f in zip(dataset_ids, fac))
+        logging.info(f"    {label}: {pretty}")
 
 for i, dataset_id in enumerate(dataset_ids):
     n_nan = int(np.isnan(dp_corrected[:, i]).sum())

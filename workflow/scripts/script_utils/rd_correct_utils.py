@@ -6,6 +6,7 @@ Functions:
 - correct_readcount_lowess: HMMcopy-style LOWESS correction on GC, MAP, REPLI
 - correct_readcount_quadreg: median quadratic-regression correction, the default
 - correct_readcount_by_target_sites: run either corrector on- and off-target separately
+- normalize_library_by_target: one library-size factor per (dataset, capture group)
 - compute_gc_rd_stats: GC-vs-depth correlation and spread, before and after
 - compute_depth_statistics: per-dataset depth summary written to depth_statistics.tsv
 """
@@ -370,6 +371,64 @@ def correct_readcount_by_target_sites(correct_fn, reads, gc, target_sites, **kwa
         rmses.append(rmse)
         weights.append(int(keep.sum()))
     return out, float(np.average(rmses, weights=weights))
+
+
+def normalize_library_by_target(mat, target_sites, bin_lengths):
+    """Rescale every dataset to a common depth level inside each capture group.
+
+    Hybrid capture gives a library two depth scales, on- and off-target, and their ratio
+    is that library's own capture efficiency. A single library-size factor per dataset
+    cannot centre both groups at once, so whichever one it centres, the other sits off by
+    the efficiency difference; a bb's tumor/normal ratio then slides with its own
+    on-target composition. Writing the expected depth of window ``w`` in dataset ``s`` as
+    ``alpha_s * kappa_s(g) * c(w) * C_s(w)`` - the dataset's depth scale, its capture
+    efficiency in group ``g``, the window-intrinsic efficiency, the copy number -
+    rescaling each group to the across-dataset mean of that group divides
+    ``alpha_s * kappa_s(g)`` out of every pairwise ratio, leaving ``c(w)`` to cancel as it
+    already does. Total sequenced bases does not stand in for ``alpha_s * kappa_s(g)``: it
+    says how much was sequenced, not how it split between captured and uncaptured
+    sequence, which is the whole quantity at issue.
+
+    What the rescale cannot separate is copy number from capture density: the estimated
+    level of group ``g`` carries the genome-average copy number seen through that group's
+    windows. The result is a copy-number ratio up to one global constant only while that
+    average is the same for both groups, i.e. while copy number is uncorrelated with
+    capture-target density genome-wide. Estimating the on-minus-off level gap once
+    genome-wide and once over regions believed diploid bounds the departure: the two agree
+    when the gap is efficiency rather than copy number.
+
+    Rescales every column, not only the ``bulkWES`` ones: the efficiency term cancels in a
+    ratio only when numerator and denominator are both rescaled, so a WES tumor whose RDR
+    base is a WGS normal needs the normal rescaled too. A dataset with no capture has the
+    same expected level in both groups, so its factors come out near 1. The caller decides
+    whether any capture is present at all.
+
+    Args:
+        mat: ``(n_bins, n_datasets)`` corrected depth, NaN where undefined.
+        target_sites: Bool per bin, True where the bin overlaps a capture target.
+        bin_lengths: Per-bin length, aligned to the rows of *mat*.
+
+    Returns:
+        ``(scaled, factors)``: the rescaled depth, and ``{group label: (n_datasets,)
+        factor}``. A group with no finite bin in a column leaves that column untouched and
+        its factor NaN.
+    """
+    scaled = mat.copy()
+    factors = {}
+    for label, keep in (("off-target", ~target_sites), ("on-target", target_sites)):
+        levels = np.full(mat.shape[1], np.nan, dtype=np.float64)
+        for s in range(mat.shape[1]):
+            finite = keep & np.isfinite(mat[:, s])
+            span = bin_lengths[finite].sum()
+            if span > 0:
+                levels[s] = float(mat[finite, s] @ bin_lengths[finite] / span)
+        ref = np.nanmean(levels) if np.isfinite(levels).any() else np.nan
+        with np.errstate(invalid="ignore", divide="ignore"):
+            fac = np.where(np.isfinite(levels) & (levels > 0), ref / levels, np.nan)
+        for s in np.flatnonzero(np.isfinite(fac)):
+            scaled[keep, s] = mat[keep, s] * fac[s]
+        factors[label] = fac
+    return scaled, factors
 
 
 def compute_gc_rd_stats(mat, gc_vals, labels, n_gc_bins=100):
