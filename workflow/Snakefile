@@ -105,6 +105,7 @@ if _has_config:
     mappability_bed = _wf["mappability_bed"]
     snp_panel = _wf["snp_panel"]
     tumor_genotyping_mode = _wf["tumor_genotyping_mode"]
+    panel_allele_only = _wf["panel_allele_only"]
     bb_file = _wf["bb_file"]
 
     # === segment and window BEDs ===

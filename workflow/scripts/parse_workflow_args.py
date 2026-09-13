@@ -489,6 +489,10 @@ def parse_workflow(config):
     tumor_genotyping_mode = None
     genotype_files = None
     genotype_ignore_rg = False
+    # NB: cellsnp-lite -R already genotypes at the panel's alleles
+    panel_allele_only = bool(config["panel_allele_only"]) and (
+        run_genotyping and workflow_mode == "bulk_genotyping"
+    )
     if run_genotyping:
         assert snp_panel, f"snp_panel is required for {workflow_mode}"
         check_local_path(snp_panel, "snp_panel")
@@ -538,6 +542,12 @@ def parse_workflow(config):
                 f"tumor_genotyping_mode={tumor_genotyping_mode or 'none'} "
                 f"(genotyped tumor={genotype_tumor})"
             )
+            if genotype_tumor and not panel_allele_only:
+                logging_snakemake(
+                    "genotyping a tumor: forcing panel_allele_only, so ALT comes from "
+                    "snp_panel and a somatic allele cannot become the called ALT"
+                )
+            panel_allele_only = panel_allele_only or genotype_tumor
         else:
             tumor_genotyping_mode = "vaf_cutoff"
             logging_snakemake(
@@ -758,6 +768,7 @@ def parse_workflow(config):
         "extremity_tsv": extremity_tsv,
         "snp_panel": snp_panel,
         "tumor_genotyping_mode": tumor_genotyping_mode,
+        "panel_allele_only": panel_allele_only,
         "reference": reference,
         "genome_size": genome_size,
         "gtf_file": gtf_file,

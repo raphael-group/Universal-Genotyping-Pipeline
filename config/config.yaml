@@ -63,6 +63,11 @@ params_build_windows:
 # Genotyping
 snp_panel: null
 genotype_dataset_ids: []
+# true: bcftools call is constrained to the panel's REF/ALT, so a site can only be
+# genotyped as the panel spells it. false: the panel gives positions only, REF comes from
+# `reference` and ALT from the reads. Forced true when a genotyped dataset is a tumor.
+# bulk_genotyping only; cellsnp-lite -R already fixes the alleles.
+panel_allele_only: true
 
 # bulk genotyping + bulk pileup (bcftools mpileup)
 params_bcftools:

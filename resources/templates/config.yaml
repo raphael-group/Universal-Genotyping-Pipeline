@@ -55,6 +55,8 @@ target_bed: null
 # Genotyping
 snp_panel: /path/to/snps.vcf.gz
 genotype_dataset_ids: []
+# false: the panel gives positions only, ALT is called from the reads
+panel_allele_only: true
 
 ##################################################
 # Phasing

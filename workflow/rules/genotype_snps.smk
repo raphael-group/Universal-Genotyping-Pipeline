@@ -6,8 +6,8 @@ Last update: 2026-08-28
 tumor) picks how the calls become genotypes; see workflow/scripts/post_genotype_snps.py.
 
 Rules:
-- [bulk] genotype_snps_bulk: bcftools calls one chromosome from the alignments, always
-  constrained to the snp_panel's REF/ALT
+- [bulk] genotype_snps_bulk: bcftools calls one chromosome from the alignments, at the
+  snp_panel's positions and, under panel_allele_only, its REF/ALT
 - [bulk] post_genotype_snps_bulk: threshold the calls into genotypes, or symlink them
   through when no genotyped dataset is a tumor, every chromosome in one job
 - [single-cell] genotype_snps_pseudobulk_mode1b: cellsnp-lite calls one modality
@@ -51,9 +51,13 @@ if workflow_mode == "bulk_genotyping" and run_genotyping:
             bam_arg=bam_stream_arg(genotype_files),
             chrom=lambda wc: input_chrom(wc.chrname),
             alleles_arg=lambda wc, input: (
-                "--constrain alleles --targets-file "
-                f"<(bcftools query --regions {input_chrom(wc.chrname)} "
-                f"--format '%CHROM\\t%POS\\t%REF,%ALT\\n' {input.snp_panel})"
+                (
+                    "--constrain alleles --targets-file "
+                    f"<(bcftools query --regions {input_chrom(wc.chrname)} "
+                    f"--format '%CHROM\\t%POS\\t%REF,%ALT\\n' {input.snp_panel})"
+                )
+                if panel_allele_only
+                else ""
             ),
             ignore_rg="--ignore-RG" if genotype_ignore_rg else "",
         shell:

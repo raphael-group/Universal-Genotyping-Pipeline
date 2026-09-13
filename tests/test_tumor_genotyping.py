@@ -4,7 +4,8 @@ The auto-pick prefers a normal, whose germline GT passes through; it falls throu
 tumor when the sample carries none, and the VAF cutoff then genotypes it.
 `params_combine_counts.detect_loh_tumor_cell_line` is independent of all that: it is a binning decision,
 made in combine_counts from het-SNP density, since one site's counts cannot tell a gHET
-inside LOH from a gHOM.
+inside LOH from a gHOM. `panel_allele_only` is the other tumor guard: it pins the called
+alleles to the panel's, and a genotyped tumor forces it on.
 """
 
 from conftest import dryrun
@@ -54,13 +55,29 @@ def test_only_a_detect_loh_run_declares_the_qc_page(workspace):
     assert "detect_loh.bulk.pdf" in on.stdout
 
 
-def test_panel_alleles_are_always_constrained(workspace):
-    """The panel's REF/ALT are fixed in every mode; there is no opting out."""
-    for extra in ((), [DETECT_LOH], ['genotype_dataset_ids=["D1"]']):
+def test_panel_alleles_are_constrained_by_default(workspace):
+    """panel_allele_only defaults true, so the call carries the panel's REF/ALT."""
+    for extra in ((), [DETECT_LOH]):
         proc = bulk(workspace, extra)
         assert proc.returncode == 0, proc.stderr[-1500:]
         assert "--constrain alleles" in proc.stdout
         assert "%CHROM\\t%POS\\t%REF,%ALT" in proc.stdout
+
+
+def test_panel_alleles_can_be_disabled(workspace):
+    """False leaves the panel as positions only, ALT called from the reads."""
+    proc = bulk(workspace, ["panel_allele_only=False"])
+    assert proc.returncode == 0, proc.stderr[-1500:]
+    assert "--constrain alleles" not in proc.stdout
+    assert "--targets-file" in proc.stdout
+
+
+def test_genotyping_a_tumor_forces_panel_alleles(workspace):
+    """A somatic allele must never become the called ALT, explicit False or not."""
+    proc = bulk(workspace, ['genotype_dataset_ids=["D1"]', "panel_allele_only=False"])
+    assert proc.returncode == 0, proc.stderr[-1500:]
+    assert "--constrain alleles" in proc.stdout, "the explicit False must be overridden"
+    assert "forcing panel_allele_only" in proc.stdout + proc.stderr
 
 
 def test_single_cell_always_thresholds_counts(workspace):
