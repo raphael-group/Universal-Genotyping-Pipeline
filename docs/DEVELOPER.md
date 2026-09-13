@@ -11,6 +11,7 @@ and may keep older wording - see [Legacy surface names](#legacy-surface-names).
 - [Genomic units](#genomic-units)
 - [Matrix axes](#matrix-axes)
 - [Supporting words](#supporting-words)
+- [Coordinate invariant](#coordinate-invariant)
 - [Identifiers](#identifiers)
 - [Retired synonyms](#retired-synonyms)
 - [Legacy surface names](#legacy-surface-names)
@@ -89,9 +90,9 @@ Three suffixes, three meanings:
 
 | Suffix | Meaning | Examples |
 |---|---|---|
-| `_id` | a unit's identifier | `region_id`, `seg_id`, `bin_id`, `bb_id`, `snp_id`, `feature_id`, `cluster_ids` |
+| `_id` | a unit's identifier | `region_id`, `seg_id`, `bin_id`, `bb_id`, `feature_id`, `cluster_ids` |
 | `_df_idx` | a row index into a DataFrame, and into any matrix aligned to it | `RAW_SNP_DF_IDX`, `_df_idx` |
-| `_idx` | a positional index local to one function, into neither | `hit_idx`, `ideal_idx`, `gc_bin_idx` |
+| `_idx` | a positional index local to one function, into neither | `na_idx`, `ideal_idx`, `gc_bin_idx` |
 
 An id survives a reindex; a `_df_idx` does not. Anything crossing a function or column
 boundary must say which of the two it is.
@@ -112,7 +113,6 @@ Do not reintroduce these:
 | row / column / col | feature / observation |
 | chunk (genomic) | segment. The pandas `chunksize` read batch keeps the word. |
 | rep / replicate (in an identifier) | dataset. `dataset_id` is the sample-sheet key and the `{dataset_id}` wildcard; prose may still say "replicate". |
-| `REP_ID`, `RDR_BASE_REP_ID`, `SAMPLE_NAME` (output columns) | `dataset_id`, `rdr_base_dataset_id`, `sample_id`. Renamed in the Unreleased block; every `sample_ids.tsv` column is now the sample-file record key, spelled the same. |
 | arm | region (prose may still say "chromosome arm") |
 | segmentation (meaning binning) | binning; `seg_id` is the unrelated segment level |
 
@@ -126,8 +126,7 @@ them uses the canonical word.
 | `window_size`, `window_bed`, `params_build_windows` (config keys) | fixed bin |
 | `aux/windows.bed.gz`, `windows.3col.bed.gz`, `window.dp.npz`, `window.raw.dp.npz` (outputs) | fixed bin |
 | `build_windows.smk`, `build_window_bed`, `window_bed_to_3bed` (rules) | fixed bin |
-| `BLOCKSIZE` (output column), `max_blocksize` (config key) | bb span |
-| `min_snp_per_bin`, `min_snp_reads` (config keys) | thresholds on a **bb** |
+| `min_snp_per_bin`, `min_snp_reads`, `min_total_reads` (config keys) | thresholds on a **bb** |
 | `bb.tsv.gz`, `bb_dir`, `bb_id` | the merged bin (HATCHet's `.bb` convention) |
 | `PS` (VCF tag and column) | phase cluster |
 
@@ -153,20 +152,17 @@ them uses the canonical word.
 
 | Verb | Contract |
 |---|---|
-| `read_*` | parse a file (`io_utils` only) |
+| `read_*` | parse a file; every reader of an *input* file lives in `io_utils` |
 | `build_*` | construct a unit set, id map, or descriptor; no matrix math |
-| `assign_*` | attach a target-unit id to each query feature; no sums. Returns `(annotated_qry, na_idx)`, never mutates the query, and takes `fillna=` / `dropna=` (mutually exclusive). `na_idx` holds the positional indices of the unassigned rows, so a parallel matrix subsets the same way |
+| `assign_*` | attach a target-unit id to each query feature; no sums. The `range_utils` family returns `(annotated_qry, na_idx)`, never mutates the query, and takes `fillna=` / `dropna=` (mutually exclusive); `na_idx` holds the positional indices of the unassigned rows, so a parallel matrix subsets the same way. `assign_features_to_ranges` is the exception: it drops unassignable features from the AnnData it returns |
 | `map_*` | reindex a matrix onto a target feature axis, 0-filling the absent features; no sums, the axis length changes but no value does |
-| `sum_*` | collapse a matrix along one axis using a cluster-id array |
-| `count_*` | tally events into units |
-| `aggregate_*` | collapse with weighting or a non-trivial reduction |
+| `sum_*` | collapse a matrix along one axis using a cluster-id array, or tally events into units |
 | `summarize_*` | reduce bin-level data to one value per output unit per observation. Named `summarize_<quantity>_<unit>` (`summarize_read_depth_bb`, `summarize_rdr_bb`), the one place the target unit is a plain suffix rather than `_to_<target>` |
 | `interp_*` | derive a value or bound between known points (`interp_pos_ranges`, `interp_cM_between_bbs`) |
 | `compute_*` | derive a numeric quantity from already-aggregated data |
 | `estimate_*` | statistical estimate |
-| `mask_*` | return a boolean selection |
 
-Two kernels sit under everything else; the rest are callers or wrappers.
+Three kernels sit under everything else; the rest are callers or wrappers.
 
 | Kernel | Module | Wrappers |
 |---|---|---|

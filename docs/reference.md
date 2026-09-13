@@ -30,6 +30,7 @@ Pipeline dependencies live under `workflow/envs/`:
 | `longphase.yaml` | LongPhase (long-read) phasing. |
 | `cellsnp.yaml` | cellsnp-lite: single-cell genotyping + pileup. |
 | `mosdepth.yaml` | mosdepth read-depth counting (bulk). |
+| `bedtools.yaml` | bedtools/samtools: per-window read-start counting (bulk). |
 | `ucsc.yaml` | UCSC tools (`bigWigToBedGraph`, `liftOver`) for the Repli-seq track. |
 
 ---
@@ -52,6 +53,7 @@ Defaults in `config/config.yaml`, template in [templates](../resources/templates
 | `reference_version` | Yes | Reference version to select samples. See [Reference version](sample_sheet.md#reference-version). |
 | `remote_mode` | Optional | Remote input handling: `storage` (default; download whole file via Snakemake storage) or `stream` (read URLs directly, fetching only `chromosomes`). |
 | `genotype_dataset_ids` | Optional | `dataset_id`s piled up to call germline SNPs. Empty -> auto (normal before tumor, short-read before long-read). >1 are pooled in one `mpileup` and must share an `@RG SM` tag. |
+| `panel_allele_only` | Optional; `bulk_genotyping`; default `true` | Constrain `bcftools call` to the panel's `REF,ALT` (`--constrain alleles`). `false` uses the panel for positions only, taking `REF` from `reference` and `ALT` from the reads. Forced `true` when a genotyped dataset is a `tumor`. |
 | `phase_dataset_ids` | Optional | Datasets used for long-read phasing inputs. |
 | `phaser` | Genotyping | `eagle` \| `shapeit` \| `longphase`. |
 | `het_snp_vcf_phased` | Optional | Default `true`: the input `het_snp_vcf` is phased or not. |
@@ -65,13 +67,13 @@ Defaults in `config/config.yaml`, template in [templates](../resources/templates
 | `genome_size` | Yes | Two-column `chrom\tsize` genome size file. |
 | `gtf_file` | Yes | Gene annotation GTF (gzipped). |
 | `region_bed` | Yes | BED file listing whitelist chromosome arms. |
-| `extremity_tsv` | Optional | TSV file listing extremity from upstream SV caller. |
+| `extremity_tsv` | Optional | Headered TSV of upstream SV breakpoints (`#CHR`, `POS0`). Each breakpoint cuts the arm holding it, so no window and no bb spans an SV junction. Setting it ignores any pre-built `window_bed`, since the grid is re-tiled from the cut segments. Template: `resources/templates/extremity.tsv`. |
 | `window_bed` | Optional | Pre-built window BED with read depth covariates. Ignored when `extremity_tsv` is set. |
 | `mappability_bed` | Optional | BED mappability track (4th column = score). |
-| `target_bed` | Optional; `bulkWES` | Hybrid-capture target intervals (BED3+). Marks each window on- or off-target. See `resources/scripts/fetch_capture_targets.sh`. |
+| `target_bed` | Optional; `bulkWES` | Hybrid-capture target intervals (BED3+). Marks each window on- or off-target, which `rd_correct` then fits and normalizes separately; see [Whole-exome sequencing (WES)](bulk_genotyping.md#whole-exome-sequencing-wes). Fetch one with `resources/scripts/fetch_capture_targets.sh`. |
 | `blacklist_bed` | Optional | ENCODE-style blacklist; pre-built at `resources/data/hg38-blacklist.v2.bed.gz`. |
-| `gene_blacklist_file` | Optional | Genes to exclude from AnnData (single-cell). |
-| `snp_panel` | Genotyping | Population SNP VCF, bgzipped and indexed (`.vcf.gz` + `.tbi`/`.csi`). Bulk passes it to `bcftools mpileup -T` (positions only, panel alleles ignored); single-cell to `cellsnp-lite -R`. |
+| `gene_blacklist_file` | Optional | Genes to exclude from AnnData (single-cell), one gene symbol or id per line. |
+| `snp_panel` | Genotyping | Population SNP VCF, bgzipped and indexed (`.vcf.gz` + `.tbi`/`.csi`). Bulk passes its positions to `bcftools mpileup -T` and, under `panel_allele_only`, its `REF,ALT` to `bcftools call --constrain alleles`; single-cell passes it to `cellsnp-lite -R`. |
 | `phasing_panel` | eagle/shapeit | Per-chromosome BCF reference panel directory. |
 | `gmap_path` | eagle/shapeit | Genetic map; `{chrname}` placeholder for per-chromosome maps (SHAPEIT5), literal path for a single map (Eagle2). |
 | `het_snp_vcf` | Optional; required for `copytyping_preprocess` | Pre-computed gHET VCF. |
@@ -126,45 +128,37 @@ Used by `genotype_snps_pseudobulk_mode1b`, `pileup_snps_*` (single-cell).
 | `minCOUNT_pileup` | Minimum aggregate count when piling up. |
 
 #### `params_genotype_snps`
-Genotyping from allele counts, in both modes.
+Genotyping from allele counts, in both modes. One rule: threshold the counts.
 
 | Field | Description |
 |---|---|
-| `apply_clonal_loh_hmm` | Bulk only. Default `false`. Set `true` for a high-purity tumor: every callable panel site is kept and re-genotyped by the clonal-LOH HMM below. Every genotyped dataset must then be `sample_type: tumor`. |
-| `min_dp` | Depth floor; below it a site is not called, in either mode. |
-
-##### Single-cell, `post_genotype_snps_nonbulk`
-
-No matched normal exists, so genotype comes from the summed pseudobulk counts.
-
-| Field | Description |
-|---|---|
+| `min_dp` | Depth floor; below it a site is not called. |
 | `min_het_reads` | Minimum reads on *each* allele for a het call. |
 | `min_vaf_thres` | Het VAF must lie in `[min_vaf_thres, 1 - min_vaf_thres]`. |
 | `filter_nz_OTH` | Drop SNPs with non-zero OTH (non-ref, non-alt) counts. |
 | `filter_hom_ALT` | Drop hom-ALT SNPs. |
 
-##### Bulk, `post_genotype_snps_bulk` under `apply_clonal_loh_hmm`
+The cutoff is applied wherever **any** genotyped dataset is a tumor, one GT rule for the
+whole run. When every genotyped dataset is `normal`, bulk skips this section entirely:
+`snp_dir/chr{chrname}.vcf.gz` symlinks to `snp_dir/raw/`, so bcftools' germline GT and its
+hom-alt calls pass through under the `params_bcftools` gates alone, and every field above,
+the two filters included, is inert. Single-cell always applies the cutoff, cellsnp-lite
+emitting no GT of its own.
 
-For a high-purity tumor sample, under clonal LOH, a gHET loses one haplotype and behaves like a gHOM. We use a clonal LOH HMM to re-genotype germline SNPs by a latent markov LOH-state and genotype chain fitted over chromosome arms. See `workflow/scripts/script_utils/genotype_loh_hmm.py`.
+There is no config key naming the mode. `genotype_dataset_ids` and each record's
+`sample_type` are its only inputs, and the resolved value is logged at DAG build
+(`tumor_genotyping_mode=...`). Left unset, `genotype_dataset_ids` auto-picks the first
+`normal`, so a run with a matched normal keeps passing calls through; a sample with no
+normal falls through to its tumor, which the cutoff then genotypes.
 
-| Field | Description |
-|---|---|
-| `hom_laf` | MAF of a gHOM: sequencing and mapping error. |
-| `loh_laf` | MAF of a gHET inside clonal LOH, roughly `(1 - purity) / (2 - purity)`. |
-| `pi_het` | gHET prior; only the EM starting point while `learn_pi` is on. |
-| `learn_pi` | Re-estimate `pi_het` by EM each iteration. On by default. |
-| `breakpoint_rate` | Poisson breakpoints per bp; `1e-6` is a mean segment of 1 Mb. |
-| `tau` | Beta-binomial concentration; `null` is the binomial. |
-| `n_retained` | Non-LOH states beyond the pinned clonal LOH state. |
-| `n_iter` | Maximum EM iterations. |
-| `em_tol` | Relative log-likelihood gain below which EM stops. |
-| `margin` | Minimum separation of a learned level from `loh_laf`. |
-| `loh_min` | Keep `0/1` where `P(LOH segment)` reaches this. Lower protects more; `1.1` disables the fallback. |
-| `p_het_min` | Keep `0/1` where `P(gHET)` reaches this. |
+`panel_allele_only` follows the same input: genotyping a tumor forces it on, so a somatic
+allele at a panel position can never become the called ALT. Two consequences of fixing the
+alleles: `bcftools` aborts the chromosome when the panel's `REF` disagrees with `reference`,
+and a site whose real ALT differs from the panel's is called hom-ref and drops out.
 
-> [!IMPORTANT]
-> If tumor purity is known, one can set `loh_laf` according to `(1 - purity) / (2 - purity)`.
+Depth in both sources is `REF + ALT`, with other-allele reads held apart in `OTH`, matching
+cellsnp-lite (`src/csp.h`: `DP` is "total counts for ALT and REF"). A bulk site's
+`FORMAT/DP` counts every base, so it is not the depth these thresholds see.
 
 #### `params_longphase`
 Used by `phase_snps_longphase`.
@@ -191,19 +185,14 @@ Used by `phase_and_concat_{bulk,nonbulk}`.
 | `gamma` | Credible-interval level of the balanced-het test on the normal; a SNP is kept when its beta posterior interval covers 0.5 (bulk). |
 | `exon_only` | Keep exonic SNPs only. |
 
-#### `params_mosdepth`
-Used by `run_mosdepth` (bulk).
-
-| Field | Description |
-|---|---|
-| `read_quality` | Skip alignments below this mapping quality. |
-| `extra_params` | Extra mosdepth flags. |
-
 #### `params_count_reads`
-Used by `rd_correct` (bulk); HMMcopy-style bias correction. Note that a `bulkWES` dataset is fitted on- and off-target separately based on `target_bed`.
+Used by `run_mosdepth` (per-base depth), `count_read_starts_chrom` (read-start counts) and `rd_correct` (HMMcopy-style bias correction), all bulk.
 
 | Field | Description |
 |---|---|
+| `read_quality` | Skip alignments below this mapping quality. Reaches both `mosdepth -Q` and `samtools view -q`. |
+| `exclude_flags` | SAM FLAG bitmask to exclude. Reaches both `mosdepth -F` and `samtools view -F`. |
+| `mosdepth_extra_params` | Extra mosdepth flags. |
 | `rd_correct_method` | `lowess` \| `median`. |
 | `gc_correct` | Model GC content as a covariate during fitting. |
 | `rt_correct` | Model replication-timing as a covariate during fitting. |
@@ -212,32 +201,59 @@ Used by `rd_correct` (bulk); HMMcopy-style bias correction. Note that a `bulkWES
 | `doutlier` | Top/bottom quantile of the GC/mappability domain dropped as outlier. |
 | `min_mappability` | Drop bins with mappability below this cutoff. |
 
+> [!NOTE]
+> `read_quality` and `exclude_flags` are deliberately shared so `window.dp.npz` and `{dataset_id}.rdcount.bed.gz` see the same reads.
+>
+> The default `exclude_flags: 1796` is mosdepth's own (unmapped, secondary, QC-fail, duplicate). It does **not** exclude supplementary alignments, each of which carries its own start position, so a split read is counted once per segment. The inflation scales with read length and concentrates at SV breakpoints. Long-read runs should set `exclude_flags: 3844` (`1796 | 2048`), which moves both files together.
+
+> [!NOTE]
+> With `target_bed` set and a `bulkWES` dataset in the run, `rd_correct` fits the bias
+> correction on- and off-target apart for that dataset, and applies one library-size factor
+> per (dataset, capture group) to the window depth of **every** bulk dataset. Why, and how
+> to set it: [Whole-exome sequencing (WES)](bulk_genotyping.md#whole-exome-sequencing-wes).
+>
+> `{dataset_id}.rdcount.bed.gz` and `bb.rdcount.npz` are raw read counts: neither the bias
+> correction nor this rescale touches them.
+
 #### `params_combine_counts`
 Used by `combine_counts` (bulk) and `combine_counts_nonbulk` (single-cell).
 
 | Field | Description |
 |---|---|
-| `min_snp_reads` | Reads every tumor column needs to close a bb; a list sweeps `MSR{msr}/`. |
+| `min_snp_reads` | SNP-covering reads every tumor column needs to close a bb; a list sweeps `MSR{msr}/`. |
 | `min_snp_per_bin` | SNPs needed to close a bb. |
+| `min_total_reads` | Read starts every column needs to close a bb (bulk); `0` disables. |
+| `detect_loh_tumor_cell_line` | Call clonal-LOH regions from het-SNP density and bin them without the SNP criterion (bulk). Set it for a tumor with no normal cells, e.g. a cell line: a germline het inside LOH is called hom, so the density collapses there. |
+| `loh_tile_size` | Unit of the clonal-LOH density chain (bp). A window is too sparse to count on; a tile must hold enough hets for the two rates to separate. |
+| `loh_rate_ratio` | LOH-state het rate as a fraction of the fitted neutral rate. |
+| `loh_breakpoint_rate` | Poisson breakpoints per bp for that chain; its reciprocal is the mean segment length (`1e-8` -> 100 Mb). The only thing resisting a one-tile flip, so it sets the reported region count. |
 | `gene_aware_binning` | Grow bbs by whole genes; never cut inside one. |
 | `nu` | Haldane scale turning cM distance into a switch probability. |
 | `min_switchprob` | Floor on that switch probability. |
 | `switchprob_ps` | Switch probability within one phase set (`PS`); ~0.5 across sets. |
 | `nsnp_multi` | SNPs per multi-SNP diagnostic group. |
-| `max_blocksize` | Span (bp) past which `min_snp_per_bin` is waived; `0` = no cap (bulk). |
 | `rdr_normalization` | Bulk RDR denominator: `auto` (base else median), `median`, `normal` (base required). |
 | `phase_flip_test` | Split a phase cluster failing the haplotype-flip test (bulk). |
 | `phase_flip_epsilon` | Effect size of that test (bulk). |
 | `phase_flip_alpha` | Significance level of that test (bulk). |
 
 > [!NOTE]
-> Adaptive binning merges consecutive windows, and closes a bb only when:
-> - every tumor column has `min_snp_reads` SNP reads.
-> - the bb holds `min_snp_per_bin` SNPs, or `[bulk]` spans `max_blocksize`.
-> - the next window starts a new gene, under `gene_aware_binning`.
-> - a bb never spans two `region_id`, `seg_id` or `PS` clusters.
-> - `[bulk]` nor two `phase_cluster` clusters, under `phase_flip_test`.
-> - a trailing run below threshold merges into the previous bb.
+> Adaptive binning merges consecutive windows left to right and closes a bb when BOTH
+> hold, the rule HATCHet2 uses (`adaptive_bins_arm`,
+> [combine_counts.py](https://github.com/raphael-group/hatchet/blob/master/src/hatchet/utils/combine_counts.py)):
+> - every tumor column has `min_snp_reads` SNP reads and the bb holds `min_snp_per_bin` SNPs;
+> - `[bulk]` every column has `min_total_reads` read starts.
+>
+> There is no span cap: a cap can only fire by cutting a bb that has not met these, so
+> the two criteria would contradict each other. What bounds a bb instead:
+> - a bb never spans two `region_id`, `seg_id`, `loh_id` or `PS` clusters;
+> - `[bulk]` nor two `phase_cluster` clusters, under `phase_flip_test`;
+> - the next window starts a new gene, under `gene_aware_binning`;
+> - a trailing run below threshold merges into the previous bb, and a cluster that never
+>   meets the thresholds stays one bb (logged).
+>
+> Inside a clonal-LOH region the SNP criterion is dropped, since no germline het survives
+> there; `min_total_reads` alone sizes those bbs and their allele counts are stamped.
 >
 > bbs are then post-filtered:
 > - `[bulk]` drop a bb whose BAF is NaN: no SNP, or a column with no read over them.
@@ -256,7 +272,7 @@ Used by all multi-thread rules.
 | `genotype` | Threads for genotyping; `bcftools mpileup` is single-threaded, so these size the `call` and `view` output compressors only. |
 | `phase` | Threads for phasing. |
 | `pileup` | Threads for the pileup step (bulk: the `bgzip` writing the counts; single-cell: cellsnp-lite, which is genuinely parallel). |
-| `mosdepth` | Threads for mosdepth. |
+| `mosdepth` | Threads for the bulk read-counting rules: `mosdepth -t`, and `samtools view -@` in `count_read_starts_chrom`. |
 
 > [!NOTE]
 > `bcftools` applies `--threads` to the output handle only, never to the BAM/CRAM
@@ -308,6 +324,7 @@ A `min_snp_reads` list writes one `MSR{msr}/` per value.
 | `bb.tsv.gz` | bb annotations, the matrix row axis. |
 | `bb.{Tallele,Aallele,Ballele}.npz` | Allele counts, in matrix-column order. |
 | `bb.{depth,rdr}.npz` | Depth, and RDR for the tumor columns only. |
+| `bb.rdcount.npz` | Read starts summed from the windows, int32, every column. |
 | `sample_ids.tsv` | One row per matrix column. |
 | `multi_snp/bulk/` | Multi-SNP diagnostic groups, bb schema, outside `MSR{msr}/`. |
 
@@ -346,6 +363,7 @@ columns are cells.
 | `snp.{Tallele,Aallele,Ballele}.npz` | Allele counts, in matrix-column order. |
 | `window.tsv.gz` | The windows on the run's chromosomes, the depth matrix row axis. |
 | `window.depth.npz` | Bias-corrected depth, windows x datasets. |
+| `window.rdcount.npz` | Read starts, windows x datasets, int32. |
 | `sample_ids.tsv` | One row per matrix column. |
 
 **`single_cell_genotyping`** and **`copytyping_preprocess`** - `bb_dir/unit/{assay_type}/`; columns are cells.
@@ -376,11 +394,12 @@ whole to the bb it overlaps most.
 | `phase_dir/genetic_map.tsv.gz` | Parsed genetic map (eagle/shapeit). |
 | `pileup_dir/{assay_type}_{dataset_id}/` | Bulk `bcftools.counts.tsv.gz`, concatenated from per-chromosome `bcftools.counts.chr{chrname}.tsv.gz` (temporary); single-cell `cellSNP.*`. |
 | `pileup_dir/{assay_type}/out_mosdepth/` | Per-dataset mosdepth (bulk). |
+| `pileup_dir/{assay_type}/out_rdcount/` | Per-dataset, per-chromosome read-start counts (bulk, temporary). |
+| `pileup_dir/{assay_type}/{dataset_id}.rdcount.bed.gz` | Per-window read-start counts (bulk): `#CHR START END COUNT`, headerless, mosdepth's `regions.bed.gz` shape. `combine_counts` joins it onto the window grid. |
 | `pileup_dir/bulk/window.raw.dp.npz` | Raw read depth, windows x every bulk dataset. |
 | `pileup_dir/bulk/window.dp.npz` | Corrected read depth, windows x every bulk dataset. |
 | `allele_dir/` | `snps.tsv.gz`, `snp.{T,A,B}allele.npz`, `sample_ids.tsv`, `barcodes.tsv.gz`. |
 | `bb_dir/{assay_type}.h5ad` | Gene x cell AnnData (scRNA / spatial). |
-| `aux_dir/clonal_loh_hmm.{segments,params}.tsv` | The fitted chain; header-only when the HMM did not run. |
 | `aux_dir/segment.bed` | Arms cut at the SV extremities, blacklist subtracted. |
 | `aux_dir/windows.bed.gz` | The shared window BED. |
 | `aux_dir/repliseq/` | Repli-seq tracks, lifted from hg19 when the run is not hg19. |
@@ -390,15 +409,13 @@ whole to the bb it overlaps most.
 | File | Columns |
 |---|---|
 | `snps.tsv.gz` | `#CHR POS POS0 START END GT PHASE region_id seg_id feature_id feature_type`; bulk adds `PS`. |
-| `bb.tsv.gz` | `#CHR START END #SNPS region_id switchprobs feature_id`. |
+| `bb.tsv.gz` | `#CHR START END #SNPS region_id switchprobs feature_id`, plus `#feature` for an RNA assay and `is_loh` under `detect_loh_tumor_cell_line`: those rows carry a stamped BAF, not a measured one. |
 | `snp.tsv.gz` | The `snps.tsv.gz` columns, restricted to the SNPs inside a window. |
-| `window.tsv.gz` | `#CHR START END region_id seg_id`. |
+| `window.tsv.gz` | `#CHR START END region_id seg_id`, plus `is_loh` under `detect_loh_tumor_cell_line`. |
 | `gene.tsv.gz` | `#CHR START END feature_id region_id`. |
 | `sample_ids.tsv` | `SAMPLE sample_id dataset_id sample_type assay_type`; bulk adds `rdr_base_dataset_id`. |
 | `germline_snp_statistics.tsv` | Per chromosome: het_phased, het_unphased, hom_alt, hom_ref. |
 | `depth_statistics.tsv` | Per-dataset depth summary, every bulk dataset in one table. |
-| `clonal_loh_hmm.segments.tsv` | `#CHR START END state b_s n_snps n_het mean_maf`; the Viterbi path as intervals, one row per run of constant state within an arm. `state` 0 is clonal LOH, `b_s` its fitted het MAF. |
-| `clonal_loh_hmm.params.tsv` | `means pi loglik n_iter converged n_sites n_arms n_segments`; one row describing the fit. |
 
 > [!NOTE]
 > - `PHASE`: 0 = the B-allele is ALT, 1 = the B-allele is REF.
@@ -412,8 +429,9 @@ One multi-page PDF per rule, flat:
 
 | File | Contents |
 |---|---|
-| `post_genotype_snps.{bulk_or_nonbulk}.pdf` | SNP allele frequency, one page per grouping: genotype, LOH state (`apply_clonal_loh_hmm` only). |
+| `post_genotype_snps.{bulk_or_nonbulk}.pdf` | SNP allele frequency by genotype. |
+| `detect_loh.bulk.pdf` | Het-SNP density per tile against the two fitted rates, coloured by the decoded state (`detect_loh_tumor_cell_line` only). |
 | `phase_and_concat.{bulk_or_assay}.pdf` | SNP allele frequency and depth. |
 | `rd_correction.bulk.pdf` | Depth before/after correction, GC/MAP/RT diagnostics. |
 | `combine_counts.{bulk_or_assay}.MSR{msr}.pdf` | Binning QC, one per `min_snp_reads`. |
-| `combine_counts_fixed_bins.{assay_type}.pdf` | SNP- and bb-level BAF. |
+| `combine_counts_fixed_bins.{assay_type}.pdf` | Per dataset: a SNP BAF page, then a bb page of pseudobulk RDR over BAF. |

@@ -1,5 +1,13 @@
 # TODO
 
+# MSR vector to support joint whole-genome / targeted segmentation
+
+Replace the scalar `min_snp_reads` with a per-dataset vector derived from a target BAF standard
+error, so assays of unequal read supply (WGS + WES, WGS + CRISPR-targeted) can share one bb grid.
+Design, model, and implementation steps: `.claude/msr_vector.md`.
+
+# slurm support
+
 ## Test pipeline
 
 Goal: after a user clones + installs the pipeline, one command runs a real end-to-end
@@ -7,58 +15,83 @@ test that exercises a full mode, not a per-rule dry run.
 
 Two layers:
 - **Dry-run (DAG) tests** (`tests/test_dryrun.py`, `tests/test_remote.py`): built, all
-  modes x JSON/TSV; execute no rule, need no data. Keep as the fast default.
-- **End-to-end tests** (`tests/data/<case>/`): a real `snakemake` run to final
-  `bb_dir/` outputs. One directory per case: `samples.json` + `config.yaml` (+ reference
-  staging notes). Later cases: single_cell_genotyping, copytyping_preprocess, spatial.
+  modes x JSON/TSV; execute no rule, need no data. This is what CI runs.
+- **End-to-end tests**: a real `snakemake` run to final `bb_dir/` outputs. Not in the
+  repo. Sample sheets and configs for real cases live outside it, since the inputs are
+  whole-genome remote alignments and no hosted runner can execute them.
 
-Cases:
-- [x] `hatchet2_chr22_simulation`: HATCHet demo-complete data, hg19/chr22, 1 matched
-      normal + 3 tumors (alignments streamed from Zenodo 4046906), phasing panel from
-      Zenodo 6709541, pre-built hg19 window BED (GC + MAP + REPLI) + blacklist + gtf.
-      Source dir holds only `README.md` + wrapper scripts + `config.yaml` +
-      `samples.json`; `prepare_refs.sh` stages references and `run_pipeline.sh` /
-      `check_outputs.sh` run + verify. Runtime (staged refs + outputs) under gitignored
-      `.test-run/`. CI: `.github/workflows/it-hatchet2_chr22_simulation.yml` (run locally
-      via `act`).
-- [ ] `single_cell_genotyping`, `copytyping_preprocess`, spatial cases.
+- [ ] Decide where end-to-end case definitions live (separate repo, or a gitignored
+      working dir) and how references are staged.
+- [ ] Cases to cover: `single_cell_genotyping`, `copytyping_preprocess`, spatial.
 
-Harness: GitHub Actions workflow (`.github/workflows/`) that installs the env
-(conda/mamba), stages references, runs the case, and asserts outputs; gate the heavy
-end-to-end job behind a manual/scheduled trigger, keep dry-run tests on every push.
+Harness: if end-to-end returns, gate it behind a manual/scheduled trigger and keep the
+dry-run tests on every push.
+
+## Tumor-only genotyping (no matched normal)
+
+Today every mode needs a normal to call germline SNPs: `genotype_dataset_ids` defaults to the
+first normal, and a tumor-only run genotypes off tumor reads with a WARN.
+
+- [ ] Distinguish germline het from hom-alt SNPs in a high-purity tumor without a matched
+      normal. Adapt https://github.com/raphael-group/hetdetect.
+    - retrieve population ALT frequency as prior genotype info. high ALT freq indicates likely hom-alt
+
+## Segmentation parameter selection
+
+`min_snp_reads` (and `min_total_reads`) are chosen by hand: a list sweeps the grid and the
+user picks a point off the QC PDFs. The `select_segmentation` script that scored a
+`(min_snp_reads, max_blocksize)` grid is not in the tree, and `max_blocksize` itself is gone.
+
+- [ ] Automated model selection for the segmentation parameters against sequencing coverage
+      and segmentation variance, i.e. recommend one grid point instead of a sweep.
+- [ ] Concretely: pick a default MSR at the elbow of lag-1 RDR/BAF dispersion vs bin count,
+      and record the pick alongside the outputs (was a TODO comment in `combine_counts.py`,
+      pointing at a `docs/combine_counts_pseudocode.md` that is not in the repo).
 
 ## Others
-- Distinguish germline Het from Hom-alt SNPs from high purity tumor sample without matched-normal sample. Adapt https://github.com/raphael-group/hetdetect.
-    - retrieve population ALT frequency as prior genotype info. high ALT freq indicates likely hom-alt 
 - Streaming remote data (DONE for bulk): `remote_mode: stream` reads remote BAM/CRAM directly
   with bcftools/mosdepth, fetching only the config `chromosomes` (index jumps); default stays
   `storage` (whole-file download). Single-cell/copytyping cannot stream (`cellsnp-lite` rejects
   URLs via its `access(F_OK)` guard). Follow-up: validate `##idx##` remote-index support and
   numeric parity on a real URL BAM (see plan verification).
 
-## Within-bin BAF phasing (`phase_hmm.py`)
+## Skip phasing + within-bb EM phasing
+
+Two linked additions. Full design, integration points, tests and validation:
+`.claude/skip_phasing_and_bb_em.md`.
+
+1. `phaser: "none"` - genotype, skip panel and long-read phasing, carry the unphased het SNPs
+   into pileup. For runs where no phasing prior exists: no panel for the build, no long reads,
+   no external phased VCF.
+2. `params_combine_counts.phase_correction` (`none|flip_split|bin_em`) - re-orient SNPs within
+   each bb after adaptive binning, before allele counts are summed per bb. Subsumes the
+   `phase_flip_test` boolean (`true` -> `flip_split`, `false` -> `none`).
 
 Bulk `combine_counts` collapses CNA/LOH BAF toward 0.5 (seen on `hatchet2_chr22_simulation`
 dbSNP151; panel/phaser ruled out). Two causes: (1) `detect_phase_flips` fragments SNPs into
-thousands of phase-groups, and the per-group bin-count floor in `_bin_windows_numba` makes
+thousands of phase-groups, and the per-group bin-count floor in `_merge_bins_to_bbs` makes
 ~4-SNP bins so `min_snp_reads` never binds; (2) `apply_phase_to_mat` orients A/B by one
 per-SNP `PHASE` bit with no within-bin re-orientation, so unfolded bin BAF is exactly 0.500.
-HATCHet2 gets ~220 SNPs/bin and BAF ~0.20 in LOH via a per-bin EM (phase latent shared across
-samples).
+HATCHet2 gets ~220 SNPs/bin and BAF ~0.20 in LOH via a per-bin EM.
 
-Fix: a new helper `workflow/scripts/phase_hmm.py`, a within-bin multi-sample beta-binomial
-phase HMM (K=1 per bin), gated by `params_combine_counts.phase_correction`
-(`none|flip_split|bin_hmm`). Under `bin_hmm`, drop the phase-group split so bins reach the
-read target, then a per-SNP phase HMM (latent shared across samples, LD-derived switch/stay
-transitions, tau calibrated on the matched normal) re-orients SNPs inside each bin and stores
-unfolded phased-frame counts. Optional layer 2 (`cross_bin_phasing: dp`) is a 2-state Viterbi
-over bins per region for cross-bin orientation. Emission/recursion port HATCHet3
-(`cluster_bins/hmm`); per-bin-EM structure follows HATCHet2. Full design, model equations,
-combine_counts flow, and validation: `~/.claude/plans/phase-hmm-within-bin.md`.
+Model: naive Bayes EM over the tumor samples, in a new helper
+`workflow/scripts/script_utils/phase_em.py`. The per-SNP phase latent is independent across
+position; the coupling is across samples. Ports HATCHet2 `multisample_em`
+(`hatchet/utils/combine_counts.py`, doi:10.1038/s41587-020-0661-6); same shape as Alleloscope
+(doi:10.1038/s41587-021-00911-w).
 
-- [ ] Phase A: `phase_hmm.py` + `snp_switchprobs`; wire `phase_correction` into bulk
-      `combine_counts`; config/const/parser; unit test; A/B comparison vs HATCHet2 `bb`; docs.
-- [ ] Phase B: single-cell `combine_counts_nonbulk` reuse; make `bin_hmm` default after A/B.
+> [!IMPORTANT]
+> The earlier HMM design (`phase_hmm.py`, beta-binomial emission, LD switch/stay transitions,
+> tau calibrated on the matched normal, optional `cross_bin_phasing: dp` layer;
+> `.claude/phase-hmm-within-bin.md`) is superseded. Its problem statement above still
+> holds; its model does not.
+
+- [ ] Phase A: `phaser: "none"` (const, the `phased_snp_vcf` resolution in `parse_workflow`,
+      `phase_snps.smk`);
+      `phase_correction` config surface; `correct_bin_phases` as a documented no-op wired into
+      bulk and single-cell `combine_counts`; the `estimate_switchprobs_PS` `KeyError: 'PS'` fix;
+      dry-run tests; docs.
+- [ ] Phase B: implement the EM; A/B comparison vs HATCHet2 `bb`; make `bin_em` default.
 
 ## RD bias correction (potential over-correction)
 
@@ -87,7 +120,7 @@ over CNA-contaminated bins (`rd_correct_utils.py`; highest-CNA sample hurt most)
 Done: `build_segment_bed` (region_id arm + seg_id chunk) + one shared window BED
 (`aux/windows.bed.gz`, tiled from `segment.bed` at `window_size`). Every bulk assay
 (WGS/WGS-lr/WES) bins on that one grid grouped by `seg_id`, with a single read target
-`min_snp_reads` and `max_blocksize` gated behind it; one `bb_dir/MSR{msr}/bulk/`. The
+`min_snp_reads` gated behind it; one `bb_dir/MSR{msr}/bulk/`. The
 earlier WES stream (per-record `wes_targets_bed`, 267 bp exon tiling, WES-onto-WGS depth
 projection, `min_snp_reads_wes`) was removed. Verified by DAG tests only. Follow-ups:
 

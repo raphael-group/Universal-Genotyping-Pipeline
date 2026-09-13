@@ -28,7 +28,7 @@ snakemake --profile profile/ \
     -s workflow/Snakefile
 ```
 
-All pipeline dependencies can be found at [`workflow/envs/`](./workflow/envs/), see [dependencies](./docs/reference.md#dependencies) for details.
+All pipeline dependencies can be found at [`workflow/envs/`](./workflow/envs/), see [environments](./docs/reference.md#environments) for details.
 
 ---
 

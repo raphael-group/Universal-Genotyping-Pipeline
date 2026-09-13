@@ -18,44 +18,9 @@ The rule graph below shows the stages of the copytyping preprocess workflow.
 ## Input
 
 ### Sample file
-A sample sheet in JSON format records one or more samples representing patients or cell lines identified by `sample_id`. Each sample can have one or more datasets representing multiple sequencing runs collected from same sample identified by `dataset_id`. Detailed JSON format can be found at [sample_sheet.md](./sample_sheet.md). Here is an example for a 10x Epi Multiome dataset `U1` from patient `HT001`.
-
-```json
-{
-  "version": 1,
-  "samples": [
-    {
-      "sample_id": "HT001",
-      "dataset_id": "U1",
-      "assay_type": "scRNA",
-      "sample_type": "tumor",
-      "files": {
-        "alignment": "/data/HT001/multiome/outs/gex_possorted_bam.bam",
-        "alignment_index": "/data/HT001/multiome/outs/gex_possorted_bam.bam.bai",
-        "barcodes": "/data/HT001/multiome/outs/filtered_feature_bc_matrix/barcodes.tsv.gz",
-        "matrix_h5": "/data/HT001/multiome/outs/filtered_feature_bc_matrix.h5"
-      }
-    },
-    {
-      "sample_id": "HT001",
-      "dataset_id": "U1",
-      "assay_type": "scATAC",
-      "sample_type": "tumor",
-      "files": {
-        "alignment": "/data/HT001/multiome/outs/atac_possorted_bam.bam",
-        "alignment_index": "/data/HT001/multiome/outs/atac_possorted_bam.bam.bai",
-        "barcodes": "/data/HT001/multiome/outs/filtered_feature_bc_matrix/barcodes.tsv.gz",
-        "fragments": "/data/HT001/multiome/outs/atac_fragments.tsv.gz"
-      }
-    }
-  ]
-}
-```
-
-> [!IMPORTANT]
-> - (`sample_id`, `dataset_id`) must uniquely define a dataset.
-> - A paired multiome dataset is represented by two entries with same (`sample_id`, `dataset_id`) and different `assay_type` (`scRNA` and `scATAC`).
-> - alignment file (`alignment`) must be sorted, and its index file (`alignment_index`) must present.
+The sample sheet is the same one `single_cell_genotyping` takes: see
+[Sample file](single_cell_genotyping.md#sample-file) for the multiome example, and
+[sample_sheet.md](./sample_sheet.md) for the schema.
 
 ### Config file
 
@@ -114,5 +79,5 @@ Refer to [Final bins](reference.md#final-bins) for the full specification of eac
       sample_ids.tsv                           # roster: one row per dataset x assay (barcodes.tsv.gz is the column axis)
   qc/
     phase_and_concat.{assay_type}.pdf          # SNP allele frequency + depth histogram
-    combine_counts_fixed_bins.{assay_type}.pdf # SNP- and BB-level BAF
+    combine_counts_fixed_bins.{assay_type}.pdf # per dataset: SNP BAF, then bb RDR over BAF
 ```

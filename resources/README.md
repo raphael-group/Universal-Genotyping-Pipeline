@@ -17,16 +17,17 @@
 
 ## Genome Reference
 
-| Species | Reference | Alias | Gene Annotation | `genome_size` | `region_bed` |
-|---------|-----------|-------|-----------------|---------------|--------------|
-| Human | [hg19](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz) | `GRCh37`, `b37`, `hs37`, `hs37d5` | - | [hg19.chrom.sizes](data/hg19.chrom.sizes) | [hg19.regions.bed](data/hg19.regions.bed) |
-| Human | [hg38](https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz) | `GRCh38`, `hs38`, `hs38DH`, `GRCh38.p13`, `GRCh38_no_alt` | [GENCODE v38](https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz), [10x GRCh38-2024-A](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2024-A.tar.gz) | [hg38.chrom.sizes](data/hg38.chrom.sizes) | [hg38.regions.bed](data/hg38.regions.bed) |
-| Human | [chm13v2](https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.fa.gz) | `CHM13v2.0`, `CHM13`, `T2T`, `T2T-CHM13v2`, `T2T-CHM13v2.0` | [UCSC hs1 ncbiRefSeq](https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/genes/hs1.ncbiRefSeq.gtf.gz), [NCBI accession-style](https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/914/755/GCF_009914755.1_T2T-CHM13v2.0/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf.gz) | [T2T-CHM13v2.0.sizes](data/T2T-CHM13v2.0.sizes) | [T2T-CHM13v2.0.regions.bed](data/T2T-CHM13v2.0.regions.bed) |
-| Mouse | [mm10](https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.fa.gz) | `GRCm38`, `MGSCv38` | [10x mm10-2020-A](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-mm10-2020-A.tar.gz) | [mm10.chrom.sizes](data/mm10.chrom.sizes) | [mm10.regions.bed](data/mm10.regions.bed) |
+| Species | Reference | Gene Annotation | `genome_size` | `region_bed` |
+|---------|-----------|-----------------|---------------|--------------|
+| Human | [hg19](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz) | - | [hg19.chrom.sizes](data/hg19.chrom.sizes) | [hg19.regions.bed](data/hg19.regions.bed) |
+| Human | [hg38](https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz) | [GENCODE v38](https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz), [10x GRCh38-2024-A](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2024-A.tar.gz) | [hg38.chrom.sizes](data/hg38.chrom.sizes) | [hg38.regions.bed](data/hg38.regions.bed) |
+| Human | [chm13v2](https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.fa.gz) | [UCSC hs1 ncbiRefSeq](https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/genes/hs1.ncbiRefSeq.gtf.gz), [NCBI accession-style](https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/914/755/GCF_009914755.1_T2T-CHM13v2.0/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf.gz) | [T2T-CHM13v2.0.sizes](data/T2T-CHM13v2.0.sizes) | [T2T-CHM13v2.0.regions.bed](data/T2T-CHM13v2.0.regions.bed) |
+| Mouse | [mm10](https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.fa.gz) | [10x mm10-2020-A](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-mm10-2020-A.tar.gz) | [mm10.chrom.sizes](data/mm10.chrom.sizes) | [mm10.regions.bed](data/mm10.regions.bed) |
 
 > [!NOTE]
-> - `Reference` is the canonical `reference_version` value; `Alias` lists the other accepted
->   spellings (`REFVERS_ALIAS` in `config/const.py`), matched case-insensitively.
+> - `Reference` is the canonical `reference_version` value. Other spellings (`GRCh38`,
+>   `T2T-CHM13v2.0`, ...) are accepted and folded to it; the full list is in
+>   [Reference version](../docs/sample_sheet.md#reference-version).
 > - 10x annotations sit inside the Cell Ranger tarball at `genes/genes.gtf.gz`.
 > - The NCBI accession-style T2T GTF uses RefSeq accessions (e.g. `NC_060925.1`); rename to `chr*` first, see [Converting NCBI accession-style GTF to Chr notations](#converting-ncbi-accession-style-gtf-to-chr-notations).
 

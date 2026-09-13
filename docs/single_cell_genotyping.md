@@ -86,10 +86,8 @@ gene_blacklist_file: resources/data/ig_gene_list.txt
 ```
 
 > [!TIP]
-> User may specify path via `extremity_tsv`, a headered TSV of upstream SV breakpoints
-> (`#CHR` and `POS0`). Each breakpoint cuts the arm holding it, so no window and no bb
-> spans an SV junction. Setting it ignores any pre-built `window_bed`, since the grid is
-> re-tiled from the cut segments.
+> Set `extremity_tsv` to a TSV of upstream SV breakpoints and no window or bb will span an
+> SV junction; see [`extremity_tsv`](reference.md#file-paths).
 
 3. specify the population SNP panel (`snp_panel`) for germline SNP genotyping. Unlike bulk mode, single-cell genotyping piles up a pseudobulk of all datasets of a modality with [cellsnp-lite](https://cellsnp-lite.readthedocs.io/en/latest/) over `snp_panel`. See [snp-panels](../resources/README.md#snp-panels) for details.
 
@@ -108,7 +106,7 @@ phasing_panel: /path/to/1kGP_3202_hg38/phasing_panel
 gmap_path: /path/to/Eagle_v2.4.1/tables/genetic_map_hg38_withX.txt.gz
 ```
 
-5. The final step performs adaptive binning over the fixed bins jointly across all tumor datasets and obtain genomic bin by dataset UMI/ATAC-fragment counts, phased B-allele counts, and total-allele counts. Each value in the minimum-SNP-covering reads parameter (`min_snp_reads`) gives one binning result. We recommend user to set `min_snp_reads` to a list of values and inspect the QC plots at `<qc_dir>/combine_counts.bulk.MSR{msr}.pdf` for varying `min_snp_reads`, then pick the lowest value that gives reliable BAF signals.
+5. The final step performs adaptive binning over the fixed bins jointly across all tumor datasets and obtain genomic bin by dataset UMI/ATAC-fragment counts, phased B-allele counts, and total-allele counts. Each value in the minimum-SNP-covering reads parameter (`min_snp_reads`) gives one binning result. We recommend user to set `min_snp_reads` to a list of values and inspect the QC plots at `<qc_dir>/combine_counts.{assay_type}.MSR{msr}.pdf` for varying `min_snp_reads`, then pick the lowest value that gives reliable BAF signals.
 
 ```yaml
 params_combine_counts:
@@ -145,6 +143,7 @@ Refer to [Final bins](reference.md#final-bins) for the full specification of eac
         barcodes.tsv.gz                        # {BARCODE}_{dataset_id}_{assay_type} per row
         sample_ids.tsv                         # roster: one row per dataset x assay (barcodes.tsv.gz is the column axis)
   qc/
+    post_genotype_snps.nonbulk.pdf             # SNP allele frequency by called genotype
     phase_and_concat.{assay_type}.pdf          # SNP allele frequency + depth histogram
     combine_counts.{assay_type}.MSR{msr}.pdf   # binning QC, one per min_snp_reads value
 ```
