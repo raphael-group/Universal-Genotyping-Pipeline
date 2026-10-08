@@ -588,9 +588,11 @@ for (
         )
 
     bb_ids = snps_bb["bb_id"].to_numpy()
+    # a stamped bb has no measured orientation, so its residual hets are not fitted
+    em_bb_ids = np.where(snps_bb["is_loh"].to_numpy(), -1, bb_ids)
     flips = (
         correct_bin_phases(
-            snps_bb,
+            snps_bb.assign(bb_id=em_bb_ids),
             a_mtx,
             b_mtx,
             tumor_dataset_indices,
@@ -603,7 +605,7 @@ for (
             tol=phase_em_tol,
             min_snps=phase_em_min_snps,
         )
-        if phase_em
+        if phase_em and (em_bb_ids >= 0).any()
         else np.zeros(len(snps_bb), dtype=np.int8)
     )
     a_msr, b_msr = apply_phase_to_mat(tot_mtx, b_mtx, a_mtx, 1 - flips.astype(np.int64))

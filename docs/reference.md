@@ -290,6 +290,8 @@ written before it and carry the phaser's orientation.
 >
 > Inside a clonal-LOH region the SNP criterion is dropped, since no germline het survives
 > there; `min_total_reads` alone sizes those bbs and their allele counts are stamped.
+> `phase_em` does not fit those bbs: a stamped bb has no measured orientation, and the
+> calls surviving inside LOH are genotyping error.
 >
 > bbs are then post-filtered:
 > - `[bulk]` drop a bb whose BAF is NaN: no SNP, or a column with no read over them.

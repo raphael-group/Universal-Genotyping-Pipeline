@@ -132,16 +132,16 @@ params_count_reads:
 > user should inspect the effects via `<qc_dir>/rd_correction.pdf`.
 > Repli-seq covariate is only applicable to `hg19`, `hg38`, or `chm13v2`.
 
-6. The final step performs adaptive binning over the fixed bins jointly across all tumor datasets and obtain genomic bin by dataset read-depth ratio (RDR), phased B-allele counts, and total-allele counts. Each value in the minimum-SNP-covering reads parameter (`min_snp_reads`) gives one binning result. We recommend user to set `min_snp_reads` to a list of values and inspect the QC plots at `<qc_dir>/combine_counts.{stats,1d2d}.bulk.MSR{msr}.pdf` for varying `min_snp_reads`, then pick the lowest value that gives reliable BAF and RDR signals.
-```yaml
-params_combine_counts:
-  min_snp_reads: [100, 500, 1000, 2000, 3000, 5000, 7500, 10000]
-  min_total_reads: 5000 # read starts per bb per dataset; 0 disables
-```
+6. The final step performs adaptive binning over the fixed bins jointly across all tumor datasets and obtain genomic bin by dataset read-depth ratio (RDR), phased B-allele counts, and total-allele counts. The parameter `min_total_reads` defines the minimum number of starting reads per bin, and the parameter `min_snp_reads` defines the minimum number of snp-covering reads per bin. Both parameters control the bin width and influence the downstream CNA inference step.
 
 > [!TIP]
-> 1. For high-coverage (>=30x) data, we recommend to use `min_snp_reads>1000&<=5000`.
-> 2. For low-coverage/targeted data, we recommend to use `min_snp_reads>50&<=200`.
+> We recommend following settings:
+>
+> | Data | `min_snp_reads` | `min_total_reads` |
+> |---|---|---|
+> | long-read (PacBio HiFi, ONT) | 500 | 250 |
+> | short-read WGS | 500 | 5000 |
+> | short-read WES | 100 | 5000 |
 
 ### Whole-exome sequencing (WES)
 
@@ -166,6 +166,10 @@ params_count_reads:
 ```
 
 See [capture targets](../resources/README.md#capture-targets-wes) for more details.
+
+### Long-read sequencing
+
+Set `params_count_reads.exclude_flags: 3844` to avoid double-counting supplementary alignments.
 
 ## Output
 
