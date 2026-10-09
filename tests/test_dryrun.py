@@ -109,22 +109,6 @@ def test_bulk_stream_mode(workspace):
     assert "--regions chr22" in proc.stdout
 
 
-def test_params_mosdepth_is_rejected(workspace):
-    """The folded-away group is a parse error naming its replacement."""
-    proc = dryrun(
-        workspace,
-        workspace["bulk_json"],
-        "T1",
-        "bulk_genotyping",
-        ["bulkWGS"],
-        extra=('params_mosdepth={"read_quality": 11}',),
-    )
-    assert proc.returncode != 0
-    assert "params_mosdepth was folded into params_count_reads" in (
-        proc.stdout + proc.stderr
-    )
-
-
 def test_read_filters_are_shared_with_mosdepth(workspace):
     """One read_quality/exclude_flags pair reaches both mosdepth and samtools view."""
     proc = dryrun(

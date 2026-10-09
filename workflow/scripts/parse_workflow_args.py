@@ -649,23 +649,12 @@ def parse_workflow(config):
             phase_files = [rec["files"] for rec in phase_records]
 
     # === RDR normalization mode ===
-    assert "params_mosdepth" not in config, (
-        "params_mosdepth was folded into params_count_reads; move read_quality there and "
-        "rename extra_params to mosdepth_extra_params"
-    )
     do_repliseq = False
     if workflow_mode == "bulk_genotyping":
-        for _gone in ("phase_flip_test", "phase_flip_epsilon", "phase_flip_alpha"):
-            assert _gone not in config["params_combine_counts"], (
-                f"params_combine_counts.{_gone} was removed with the phase-flip split; "
-                "set phase_em instead, which re-orients SNPs inside each bb rather than "
-                "cutting the binning at a detected flip"
-            )
         _n_grid = int(config["params_combine_counts"]["phase_em_n_grid"])
         assert _n_grid >= 3 and _n_grid % 2 == 1, (
-            "params_combine_counts.phase_em_n_grid must be an odd integer >= 3, got "
-            f"{_n_grid}: the theta grid has to contain 0.5, which is both the EM's null "
-            "and the point the flipped orientation is mirrored about"
+            "params_combine_counts.phase_em_n_grid must be an odd integer >= 3 so the "
+            f"theta grid contains 0.5, got {_n_grid}"
         )
         rdr_normalization = config["params_combine_counts"]["rdr_normalization"]
         assert rdr_normalization in RDR_NORMALIZATIONS, (
@@ -696,11 +685,6 @@ def parse_workflow(config):
                 )
 
     # === min_snp_reads sweep (one MSR{msr}/ subdir per value) ===
-    assert "max_blocksize" not in config["params_combine_counts"], (
-        "params_combine_counts.max_blocksize was removed: a span cap can only fire by "
-        "cutting a bb that has not met its read thresholds. Use min_total_reads, the "
-        "read-start floor every bb must clear"
-    )
     msr_raw = config["params_combine_counts"]["min_snp_reads"]
     msr_list = [int(m) for m in (msr_raw if isinstance(msr_raw, list) else [msr_raw])]
 

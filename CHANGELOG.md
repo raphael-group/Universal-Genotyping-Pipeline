@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `params_combine_counts.phase_flip_test`, `phase_flip_epsilon` and `phase_flip_alpha`,
   with the phase-cluster split they drove: that boundary closes a bb whether or not it has
   met `min_snp_reads` and `min_total_reads`, which `phase_em` does not need.
+- The parse-time rejection of the renamed `params_mosdepth` group and the removed
+  `params_combine_counts.max_blocksize`: a config still carrying either is no longer
+  refused by name.
 
 ### Fixed
 - `process_rna_anndata` concatenates several RNA datasets on the gene id and carries
