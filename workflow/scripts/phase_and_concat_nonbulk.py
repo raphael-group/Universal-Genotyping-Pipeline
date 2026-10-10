@@ -103,10 +103,6 @@ ad_by_dataset = [None] * len(dataset_ids)
 for idx, dataset_id in enumerate(dataset_ids):
     barcodes = pd.read_table(sample_tsvs[idx], sep="\t", header=None, names=["BARCODE"])
     barcodes["BARCODE"] = barcodes["BARCODE"].astype(str)
-    # readers split on the FIRST "_" to recover the raw barcode, so it must hold none
-    assert not barcodes["BARCODE"].str.contains("_").any(), (
-        f"{dataset_id}: barcodes must not contain '_'"
-    )
     barcodes["BARCODE"] += f"_{dataset_id}_{dataset_assays[idx]}"
     barcodes_list[idx] = barcodes
     # cellsnp-lite emits one VCF + two MatrixMarket files per replicate

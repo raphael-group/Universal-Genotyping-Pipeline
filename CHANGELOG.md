@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `var` explicitly, so datasets built against different Cell Ranger references keep the
   GTF join key and a shared gene no longer splits on its symbol suffix. Genes one
   dataset's reference lacks are reported with their UMI share.
+- A raw cell barcode holding `_`, such as Visium HD's `s_{bin}um_{row}_{col}`: the
+  `{raw}_{dataset_id}_{assay_type}` matrix key is split from the right, where
+  `phase_and_concat` rejected the barcode outright and the reader mis-parsed its
+  `raw` field, silently emptying the scATAC fragment join.
 
 ## [0.1.0b2] - 2026-09-13
 

@@ -229,3 +229,30 @@ def test_concat_rna_adatas_result_writes_to_h5ad(tmp_path):
     back = anndata.read_h5ad(path)
     assert back.var_names.is_unique
     assert list(back.var["gene_ids"]) == ["g1", "g2", "g3"]
+
+
+def test_read_barcodes_by_dataset_keeps_underscored_raw_barcodes(tmp_path):
+    """A Visium HD barcode carries its own "_", so only the last two may be split on."""
+    path = tmp_path / "barcodes.tsv"
+    path.write_text(
+        "s_002um_00000_00000-1_D1_VISIUM\n"
+        "s_008um_00123_00456-1_D1_VISIUM\n"
+        "AAACCTGAGAAACCAT-1_D2_scATAC\n"
+    )
+    cells = io_utils.read_barcodes_by_dataset(str(path))
+    assert cells["raw"].tolist() == [
+        "s_002um_00000_00000-1",
+        "s_008um_00123_00456-1",
+        "AAACCTGAGAAACCAT-1",
+    ]
+    assert cells["dataset_id"].tolist() == ["D1", "D1", "D2"]
+    assert cells["assay_type"].tolist() == ["VISIUM", "VISIUM", "scATAC"]
+    assert cells["BARCODE"].tolist() == path.read_text().split()
+
+
+def test_read_barcodes_by_dataset_rejects_a_key_missing_a_field(tmp_path):
+    """Two fields cannot be recovered from one "_"."""
+    path = tmp_path / "barcodes.tsv"
+    path.write_text("AAACCTGAGAAACCAT-1_scATAC\n")
+    with pytest.raises(AssertionError, match="every barcode must be"):
+        io_utils.read_barcodes_by_dataset(str(path))

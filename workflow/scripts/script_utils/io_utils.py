@@ -600,9 +600,10 @@ def read_barcodes(bc_file: str):
 def read_barcodes_by_dataset(bc_file: str):
     """Read ``barcodes.tsv.gz`` and split each key back into its three fields.
 
-    The parse is positional: none of the three fields holds ``_`` - the assay types are
-    literals, dataset_id is barred one at load (``RECORD_ID_PATTERN``) and no raw
-    barcode carries one - so the last and first ``_`` bound the dataset_id.
+    The parse is anchored at the right: the assay types are literals and dataset_id is
+    barred ``_`` as the sheet loads (``RECORD_ID_PATTERN``), so the last two ``_`` bound
+    them however many the raw barcode holds. A Visium HD barcode holds three of its own,
+    ``s_{bin}um_{row}_{col}-1``.
 
     Args:
         bc_file: One ``{raw}_{dataset_id}_{assay_type}`` per line, no header, in
@@ -613,29 +614,18 @@ def read_barcodes_by_dataset(bc_file: str):
         key), one row per matrix column, in file order.
     """
     full = pd.read_table(bc_file, sep="\t", header=None, dtype=str).iloc[:, 0]
-    head, assay_type = _split_once(full, bc_file, from_right=True)
-    raw, dataset_id = _split_once(head, bc_file, from_right=False)
+    parts = full.str.rsplit("_", n=2, expand=True)
+    assert parts.shape[1] == 3 and parts.notna().all().all(), (
+        f"{bc_file}, every barcode must be '{{raw}}_{{dataset_id}}_{{assay_type}}'"
+    )
     return pd.DataFrame(
         {
-            "raw": raw,
-            "dataset_id": dataset_id,
-            "assay_type": assay_type,
+            "raw": parts[0],
+            "dataset_id": parts[1],
+            "assay_type": parts[2],
             "BARCODE": full,
         }
     )
-
-
-def _split_once(values: pd.Series, bc_file: str, from_right: bool):
-    """Split every barcode field on one ``_``, asserting each side is non-empty."""
-    parts = (
-        values.str.rsplit("_", n=1, expand=True)
-        if from_right
-        else values.str.split("_", n=1, expand=True)
-    )
-    assert parts.shape[1] == 2 and parts.notna().all().all(), (
-        f"{bc_file}, every barcode must be '{{raw}}_{{dataset_id}}_{{assay_type}}'"
-    )
-    return parts[0], parts[1]
 
 
 def read_chunks_from_atac_fragments(frag_file: str, chunksize=5_000_000):
