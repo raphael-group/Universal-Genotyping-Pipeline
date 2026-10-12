@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   admitting low-depth hom-alt calls into phasing.
 
 ### Changed
+- `params_genotype_snps.min_het_reads` is renamed `min_het_ad`: it floors each allele's own
+  depth, where `min_dp` and `min_hom_dp` floor the site's.
 - QC PDF names: `post_genotype_snps.{bulk,nonbulk}.pdf` -> `genotype_snps.pdf`,
   `detect_loh.bulk.pdf` -> `detect_loh.pdf`, `rd_correction.bulk.pdf` -> `rd_correction.pdf`.
 - The bulk binning QC PDF splits in two: `combine_counts.stats.bulk.MSR{msr}.pdf` holds the

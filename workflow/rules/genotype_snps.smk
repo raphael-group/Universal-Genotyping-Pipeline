@@ -1,6 +1,6 @@
 """Call het and hom-alt SNPs, or split a given VCF per chromosome.
 
-Last update: 2026-10-11
+Last update: 2026-10-12
 
 `tumor_genotyping_mode` (a parse_workflow global, None when no genotyped bulk dataset is a
 tumor) picks how the calls become genotypes; see workflow/scripts/post_genotype_snps.py.
@@ -143,7 +143,7 @@ if workflow_mode == "bulk_genotyping" and run_genotyping:
             genotyping=tumor_genotyping_mode or "passthrough",
             chroms=chr_chromosomes,
             input_nochr=input_nochr,
-            min_het_reads=config["params_genotype_snps"]["min_het_reads"],
+            min_het_ad=config["params_genotype_snps"]["min_het_ad"],
             min_vaf_thres=config["params_genotype_snps"]["min_vaf_thres"],
             filter_nz_OTH=config["params_genotype_snps"]["filter_nz_OTH"],
             filter_hom_ALT=config["params_genotype_snps"]["filter_hom_ALT"],
@@ -242,7 +242,7 @@ if workflow_mode == "single_cell_genotyping" and run_genotyping:
             chroms=chr_chromosomes,
             input_nochr=input_nochr,
             modalities=modalities,
-            min_het_reads=config["params_genotype_snps"]["min_het_reads"],
+            min_het_ad=config["params_genotype_snps"]["min_het_ad"],
             min_dp=config["params_genotype_snps"]["min_dp"],
             min_hom_dp=config["params_genotype_snps"]["min_hom_dp"],
             min_vaf_thres=config["params_genotype_snps"]["min_vaf_thres"],

@@ -134,7 +134,7 @@ Genotyping from allele counts, in both modes. One rule: threshold the counts.
 |---|---|
 | `min_dp` | Depth floor for every call; below it a site is not called. |
 | `min_hom_dp` | Depth floor for a hom call (hom-alt, hom-ref): such a call needs `max(min_dp, min_hom_dp)`. An all-ALT site below it is a no-call. |
-| `min_het_reads` | Minimum reads on *each* allele for a het call. |
+| `min_het_ad` | Minimum reads on *each* allele for a het call. |
 | `min_vaf_thres` | Het VAF must lie in `[min_vaf_thres, 1 - min_vaf_thres]`. |
 | `filter_nz_OTH` | Drop SNPs with non-zero OTH (non-ref, non-alt) counts. |
 | `filter_hom_ALT` | Drop hom-ALT SNPs. |
