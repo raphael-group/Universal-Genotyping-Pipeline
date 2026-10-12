@@ -1,7 +1,7 @@
 # Universal Genotyping Pipeline
 
 [![CI](https://github.com/raphael-group/Universal-Genotyping-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/raphael-group/Universal-Genotyping-Pipeline/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0b2-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.1.0b3-blue.svg)](VERSION)
 [![Snakemake](https://img.shields.io/badge/snakemake->=9.0-brightgreen.svg)](https://snakemake.readthedocs.io)
 
 Universal Genotyping Pipeline is a Snakemake preprocessing pipeline for downstream allele-specific CNA inference softwares including:

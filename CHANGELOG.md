@@ -5,7 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0b3] - 2026-10-12
+
+SNP phases are re-oriented inside each bulk bb (`phase_em`), replacing the phase-flip
+test, and hom calls take their own depth floor. QC PDFs are renamed and split. Config
+keys and QC paths change; `sample_id` and `dataset_id` no longer accept `_`.
 
 ### Added
 - `params_combine_counts.phase_em` (bulk): re-orients SNP phases inside each bb before its
