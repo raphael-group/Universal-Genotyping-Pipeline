@@ -10,7 +10,7 @@ Two independent axes. ``params.source`` says which VCFs hold the counts:
 - ``vaf_cutoff``: threshold depth, minor-allele reads and VAF. The tumor-only default,
   and the only option off bulk since cellsnp-lite emits no GT of its own.
 
-Last update: 2026-08-28
+Last update: 2026-10-11
 
 Inputs and outputs: see docs/reference.md#intermediates.
 
@@ -237,7 +237,7 @@ def read_counts_pseudobulk(raw_snp_vcfs, modalities, chroms):
     )
 
 
-def call_vaf_cutoff(alt, depth, min_dp, min_het_reads, min_vaf_thres):
+def call_vaf_cutoff(alt, depth, min_dp, min_hom_dp, min_het_reads, min_vaf_thres):
     """Genotype each site by thresholding its depth, minor-allele reads and VAF.
 
     The minor-allele side is ``depth - alt``, so a site needs *min_het_reads* on each of
@@ -245,10 +245,17 @@ def call_vaf_cutoff(alt, depth, min_dp, min_het_reads, min_vaf_thres):
     Hom-alt is the strict ``alt == depth``; hom-ref never survives the caller's own
     filters, so it is recorded for QC but never kept.
 
+    A het call rests on reads of both alleles, which a homozygote shows only through
+    sequencing error. A hom call rests on the other allele being absent, which a het at
+    depth d shows by chance with probability ``f**d`` (``f`` its ALT fraction, 0.5 when
+    balanced, higher under allelic imbalance). Hom calls therefore take their own floor,
+    ``max(min_dp, min_hom_dp)``; an all-ALT site below it is a no-call, not a het.
+
     Args:
         alt: ALT read count per site.
         depth: Total read depth per site.
-        min_dp: Depth floor; below it a site is a no-call.
+        min_dp: Depth floor for every call; below it a site is a no-call.
+        min_hom_dp: Depth floor for a hom-alt or hom-ref call, on top of *min_dp*.
         min_het_reads: Minimum reads on each allele for a het call.
         min_vaf_thres: Half-width of the het VAF band.
 
@@ -258,15 +265,16 @@ def call_vaf_cutoff(alt, depth, min_dp, min_het_reads, min_vaf_thres):
     ref_side = depth - alt
     allele_ratio = pd.Series(alt) / pd.Series(depth)
     called = depth >= min_dp
+    hom_called = called & (depth >= min_hom_dp)
     is_het = (
         called
         & (np.minimum(alt, ref_side) >= min_het_reads)
         & allele_ratio.between(min_vaf_thres, 1 - min_vaf_thres).to_numpy()
     )
-    is_hom_alt = called & (alt == depth)
+    is_hom_alt = hom_called & (alt == depth)
 
     gt = np.full(len(depth), "./.", dtype=GT_DTYPE)
-    gt[called & (alt == 0)] = "0/0"
+    gt[hom_called & (alt == 0)] = "0/0"
     gt[is_hom_alt] = "1/1"
     gt[is_het] = "0/1"
     return gt
@@ -307,13 +315,16 @@ ref_count = depth - alt_count
 # genotype: passthrough keeps the caller's GT, vaf_cutoff overwrites it
 # =============================================================================
 if genotyping == "vaf_cutoff":
+    min_hom_dp = int(params["min_hom_dp"])
     min_het_reads = int(params["min_het_reads"])
     min_vaf_thres = float(params["min_vaf_thres"])
     logging.info(
-        f"vaf_cutoff: min_dp={min_dp}, min_het_reads={min_het_reads}, "
-        f"min_vaf_thres={min_vaf_thres}"
+        f"vaf_cutoff: min_dp={min_dp}, min_hom_dp={min_hom_dp}, "
+        f"min_het_reads={min_het_reads}, min_vaf_thres={min_vaf_thres}"
     )
-    gt = call_vaf_cutoff(alt_count, depth, min_dp, min_het_reads, min_vaf_thres)
+    gt = call_vaf_cutoff(
+        alt_count, depth, min_dp, min_hom_dp, min_het_reads, min_vaf_thres
+    )
 else:
     assert genotyping == "passthrough", f"unknown genotyping={genotyping!r}"
     assert source == "bulk", "passthrough needs a caller's GT, which only bulk has"

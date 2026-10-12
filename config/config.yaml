@@ -90,6 +90,7 @@ params_cellsnp_lite:
 
 params_genotype_snps:
   min_dp: 10
+  min_hom_dp: 10
   min_het_reads: 2
   min_vaf_thres: 0.1
   filter_nz_OTH: false

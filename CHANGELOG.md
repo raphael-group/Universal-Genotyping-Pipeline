@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-bulk modes: total and SNP-covered counts per cell/spot, with the SNP loci and
   features each dataset detects and how sparsely they are populated. Unit level, so
   independent of `min_snp_reads`.
+- `params_genotype_snps.min_hom_dp` (default `10`): a separate depth floor for hom-alt and
+  hom-ref calls, which need `max(min_dp, min_hom_dp)`. A het call carries reads of both
+  alleles, while a hom call rests on the other allele being absent, which a het shows by
+  chance at low depth; `min_dp` can now be lowered to keep low-depth hets without
+  admitting low-depth hom-alt calls into phasing.
 
 ### Changed
 - QC PDF names: `post_genotype_snps.{bulk,nonbulk}.pdf` -> `genotype_snps.pdf`,
