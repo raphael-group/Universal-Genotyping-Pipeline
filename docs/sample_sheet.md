@@ -61,7 +61,7 @@ Sample file is a JSON-format configuration file contains dataset records over mu
 | `barcodes` | `scRNA`, `scATAC`, `VISIUM`, `VISIUM3prime` | `outs/filtered_feature_bc_matrix/barcodes.tsv.gz` |
 | `fragments` | `scATAC` | `outs/atac_fragments.tsv.gz` |
 | `matrix_h5` | `scRNA`, `VISIUM`, `VISIUM3prime` | `outs/filtered_feature_bc_matrix.h5` |
-| `tissue_positions` | `VISIUM`, `VISIUM3prime` | `outs/spatial/tissue_positions.csv` |
+| `tissue_positions` | `VISIUM`, `VISIUM3prime` | `outs/spatial/tissue_positions.csv`; Visium HD: `outs/binned_outputs/square_XXXum/spatial/tissue_positions.parquet` |
 | `scalefactors` | `VISIUM`, `VISIUM3prime` | `outs/spatial/scalefactors_json.json` |
 | `image_hires` | `VISIUM` | `outs/spatial/tissue_hires_image.png` |
 | `image_lowres` | `VISIUM` | `outs/spatial/tissue_lowres_image.png` |
