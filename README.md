@@ -91,6 +91,7 @@ snakemake --profile profile/ \
 |----------|-------------|
 | [docs/bulk_genotyping.md](docs/bulk_genotyping.md) | Bulk genotyping workflow |
 | [docs/single_cell_genotyping.md](docs/single_cell_genotyping.md) | Single-cell/spatial genotyping workflow |
+| [docs/spatial_genotyping.md](docs/spatial_genotyping.md) | Visium HD 3' genotyping workflow |
 | [docs/copytyping_preprocess.md](docs/copytyping_preprocess.md) | Copy-typing preprocessing workflow |
 | [docs/sample_sheet.md](docs/sample_sheet.md) | Sample sheet specification |
 | [docs/reference.md](docs/reference.md) | Reference manual |
